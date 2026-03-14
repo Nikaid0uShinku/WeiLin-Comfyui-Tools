@@ -158,6 +158,98 @@ app.registerExtension({
           }
         }
 
+        // 监听lora数据变化，通知UI窗口同步
+        if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
+          // 监听 lora_str 变化
+          if (nodeTextAreaList[1]) {
+            const loraTextarea = nodeTextAreaList[1];
+            const originalLoraValue = loraTextarea.value;
+            
+            // 使用 MutationObserver 监听值变化
+            const loraObserver = new MutationObserver(() => {
+              if (loraTextarea.value !== originalLoraValue) {
+                notifyLoraDataChange();
+              }
+            });
+            
+            // 同时监听 input 事件
+            loraTextarea.addEventListener('input', () => {
+              notifyLoraDataChange();
+            });
+            
+            // 监听 value 属性变化
+            let currentLoraValue = loraTextarea.value;
+            Object.defineProperty(loraTextarea, 'value', {
+              get() {
+                return currentLoraValue;
+              },
+              set(newValue) {
+                currentLoraValue = newValue;
+                notifyLoraDataChange();
+              },
+              enumerable: true,
+              configurable: true
+            });
+          }
+          
+          // 监听 temp_lora_str 变化
+          if (nodeTextAreaList[3]) {
+            const tempLoraTextarea = nodeTextAreaList[3];
+            const originalTempLoraValue = tempLoraTextarea.value;
+            
+            // 监听 input 事件
+            tempLoraTextarea.addEventListener('input', () => {
+              notifyLoraDataChange();
+            });
+            
+            // 监听 value 属性变化
+            let currentTempLoraValue = tempLoraTextarea.value;
+            Object.defineProperty(tempLoraTextarea, 'value', {
+              get() {
+                return currentTempLoraValue;
+              },
+              set(newValue) {
+                currentTempLoraValue = newValue;
+                notifyLoraDataChange();
+              },
+              enumerable: true,
+              configurable: true
+            });
+          }
+        }
+        
+        // 通知UI窗口lora数据变化的函数
+        function notifyLoraDataChange() {
+          if (promptBoxRandomID) {
+            let jsonData = {
+              prompt: nodeTextAreaList[0] ? nodeTextAreaList[0].value : "",
+              lora: [],
+              temp_prompt: {},
+              temp_lora: {},
+            }
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
+              try {
+                jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
+              } catch (e) {}
+            }
+            if (nodeTextAreaList[2] && nodeTextAreaList[2].value && nodeTextAreaList[2].value.length > 0) {
+              try {
+                jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
+              } catch (e) {}
+            }
+            if ((nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") && nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
+              try {
+                jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
+              } catch (e) {}
+            }
+            
+            window.postMessage({
+              type: 'weilin_prompt_ui_lora_data_changed_' + promptBoxRandomID,
+              data: JSON.stringify(jsonData)
+            }, '*')
+          }
+        }
+
         // Lora Stack 创建可视化节点
         if (nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
           await createLoraStackWidget(this, thisNodeSeed,nodeTextAreaList[3]);
@@ -229,91 +321,18 @@ app.registerExtension({
           }
         }
 
-        // 保存原有的onRemoved函数
-        const originalOnRemoved = this.onRemoved;
-        // 节点被删除事件
-        this.onRemoved = () => {
-          // 调用原有的onRemoved函数
-          if (originalOnRemoved) {
-            originalOnRemoved.apply(this);
-          }
-          
-          // 元素被销毁 事件发送更新元素
-          if (nodeData.name === "WeiLinPromptUI" ||
-            nodeData.name === "WeiLinPromptUIWithoutLora") {
-            removeNodeBySeed(thisNodeSeed);
-            window.parent.postMessage({ type: 'weilin_prompt_ui_update_node_list_info', nodeList: globalNodeList }, '*')
-          }
-        }
-
         // console.log(thisNodeSeed)
 
         //console.log(globalNodeList)
 
-        let randomID = ""
+        // 为不同的按钮使用不同的ID，避免冲突
+        let promptBoxRandomID = ""
+        let loraStackRandomID = ""
 
-        randomID = generateUUID();
-
-        if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIWithoutLora") {
-          // 节点按钮点击事件
-          this.addWidget("button", localLanguage, '', ($e) => {
-            // console.log(thisNodeName)
-            // 发送消息给父窗口
-            // console.log(global_randomID)
-            randomID = generateUUID();
-            // console.log("register====>",randomID)
-            let jsonData = {
-              prompt: nodeTextAreaList[0].value,
-              lora: [],
-              temp_prompt: {},
-              temp_lora: {},
-            }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
-              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
-            }
-
-            if (nodeTextAreaList[2] && nodeTextAreaList[2].value && nodeTextAreaList[2].value.length > 0) {
-              jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
-            }
-
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
-              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
-            }
-
-            const data = JSON.stringify(jsonData)
-            window.parent.postMessage({ type: 'weilin_prompt_ui_openPromptBox', id: randomID, prompt: data, node: nodeData.name }, '*')
-          });
-        }
-
-        if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
-          // 节点按钮点击事件
-          this.addWidget("button", localOpenLoraLanguage, '', ($e) => {
-            // console.log(thisNodeName)
-            // 发送消息给父窗口
-            // console.log(global_randomID)
-            randomID = generateUUID();
-            // console.log("register====>",randomID)
-            let jsonData = {
-              lora: [],
-              temp_lora: {},
-            }
-            if (nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
-              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
-            }
-
-            if (nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
-              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
-            }
-
-            const data = JSON.stringify(jsonData)
-            window.parent.postMessage({ type: 'weilin_prompt_ui_open_node_lora_stack_window', seed: randomID, prompt: data, node: nodeData.name }, '*')
-          });
-        }
-
-
-        window.addEventListener('message', event => {
+        // 定义消息处理函数，保存引用以便后续移除
+        const messageHandler = (event) => {
           // console.log(e)
-          if (event.data.type === 'weilin_prompt_ui_prompt_update_prompt_' + randomID) {
+          if (event.data.type === 'weilin_prompt_ui_prompt_update_prompt_' + promptBoxRandomID) {
             // 接收到更新提示词内容消息
 
             const jsonReponse = JSON.parse(event.data.data)
@@ -365,8 +384,8 @@ app.registerExtension({
           } else if (event.data.type === "weilin_prompt_ui_prompt_open_node_wit_seed" && event.data.seed === thisNodeSeed) {
             // 节点导航打开节点UI按钮
 
-            randomID = generateUUID();
-            // console.log("register====>",randomID)
+            promptBoxRandomID = generateUUID();
+            // console.log("register====>",promptBoxRandomID)
             let jsonData = {
               prompt: nodeTextAreaList[0].value,
               lora: [],
@@ -384,9 +403,9 @@ app.registerExtension({
             }
 
             const data = JSON.stringify(jsonData)
-            window.parent.postMessage({ type: 'weilin_prompt_ui_openPromptBox', id: randomID, prompt: data, node: nodeData.name }, '*')
+            window.parent.postMessage({ type: 'weilin_prompt_ui_openPromptBox', id: promptBoxRandomID, prompt: data, node: nodeData.name }, '*')
           
-          } else if (event.data.type === 'weilin_prompt_ui_prompt_finish_lora_stack_' + randomID) {
+          } else if (event.data.type === 'weilin_prompt_ui_prompt_finish_lora_stack_' + promptBoxRandomID) {
             // 接收到更新LoraStack内容消息
             const jsonReponse = JSON.parse(event.data.data)
             // console.log(jsonReponse)
@@ -437,24 +456,111 @@ app.registerExtension({
             }
           }else if (event.data.type === "weilin_prompt_ui_selectLora_stack_node_"+thisNodeSeed) {
             addLora(thisNodeSeed,event.data.lora)
-          }else if (event.data.type === "weilin_prompt_ui_update_template_"+randomID) {
+          }else if (event.data.type === "weilin_prompt_ui_update_template_"+promptBoxRandomID) {
             nodeTextAreaList[4].value = event.data.data
             if (nodeWidgetList[4]) nodeWidgetList[4].value = event.data.data
-          }else if (event.data.type === "weilin_prompt_ui_get_template_"+randomID) {
-            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_response', id: randomID, data: nodeTextAreaList[4].value }, '*')
-          }else if (event.data.type === "weilin_prompt_ui_get_template_go_random_"+randomID) {
-            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_go_random_response', id: randomID, data: nodeTextAreaList[4].value }, '*')
+          }else if (event.data.type === "weilin_prompt_ui_get_template_"+promptBoxRandomID) {
+            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_response', id: promptBoxRandomID, data: nodeTextAreaList[4].value }, '*')
+          }else if (event.data.type === "weilin_prompt_ui_get_template_go_random_"+promptBoxRandomID) {
+            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_go_random_response', id: promptBoxRandomID, data: nodeTextAreaList[4].value }, '*')
           }
 
-        }, false);
+        };
+
+        // 注册消息监听器
+        window.addEventListener('message', messageHandler, false);
+
+        // 添加按钮点击事件
+        if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIWithoutLora") {
+          // 节点按钮点击事件 - 打开提示词编辑器
+          this.addWidget("button", localLanguage, '', ($e) => {
+            // console.log(thisNodeName)
+            // 发送消息给父窗口
+            // console.log(global_randomID)
+            promptBoxRandomID = generateUUID();
+            // console.log("register====>",promptBoxRandomID)
+            let jsonData = {
+              prompt: nodeTextAreaList[0].value,
+              lora: [],
+              temp_prompt: {},
+              temp_lora: {},
+            }
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
+              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
+            }
+
+            if (nodeTextAreaList[2] && nodeTextAreaList[2].value && nodeTextAreaList[2].value.length > 0) {
+              jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
+            }
+
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
+              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
+            }
+
+            const data = JSON.stringify(jsonData)
+            window.parent.postMessage({ type: 'weilin_prompt_ui_openPromptBox', id: promptBoxRandomID, prompt: data, node: nodeData.name }, '*')
+          });
+        }
+
+        if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
+          // 节点按钮点击事件 - 打开Lora堆
+          this.addWidget("button", localOpenLoraLanguage, '', ($e) => {
+            // console.log(thisNodeName)
+            // 发送消息给父窗口
+            // console.log(global_randomID)
+            loraStackRandomID = generateUUID();
+            // console.log("register====>",loraStackRandomID)
+            let jsonData = {
+              lora: [],
+              temp_lora: {},
+            }
+            if (nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
+              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
+            }
+
+            if (nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
+              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
+            }
+
+            const data = JSON.stringify(jsonData)
+            window.parent.postMessage({ type: 'weilin_prompt_ui_open_node_lora_stack_window', seed: loraStackRandomID, prompt: data, node: nodeData.name }, '*')
+          });
+        }
+
+        // 保存原有的onRemoved函数
+        const originalOnRemoved = this.onRemoved;
+        // 节点被删除事件
+        this.onRemoved = () => {
+          // 调用原有的onRemoved函数
+          if (originalOnRemoved) {
+            originalOnRemoved.apply(this);
+          }
+          
+          // 移除消息监听器，防止内存泄漏和事件冲突
+          window.removeEventListener('message', messageHandler, false);
+          
+          // 元素被销毁 事件发送更新元素
+          if (nodeData.name === "WeiLinPromptUI" ||
+            nodeData.name === "WeiLinPromptUIWithoutLora") {
+            removeNodeBySeed(thisNodeSeed);
+            window.parent.postMessage({ type: 'weilin_prompt_ui_update_node_list_info', nodeList: globalNodeList }, '*')
+          }
+          
+          // 清理Lora Stack相关数据
+          if (nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
+            if (window.weilinGlobalSelectedLoras && window.weilinGlobalSelectedLoras[thisNodeSeed]) {
+              delete window.weilinGlobalSelectedLoras[thisNodeSeed];
+            }
+          }
+        }
 
         return r;
       };
 
       // When the node is executed we will be sent the input text, display this in the widget
-			const onExecuted = nodeType.prototype.onExecuted;
-			nodeType.prototype.onExecuted = function (message) {
-				onExecuted?.apply(this, arguments);
+      const onExecuted = nodeType.prototype.onExecuted;
+      nodeType.prototype.onExecuted = function (message) {
+        onExecuted?.apply(this, arguments);
         const positiveWidget = this.widgets.find(w => w.name === "positive");
         if (positiveWidget && message.positive) {
           positiveWidget.element.value = message.positive;
@@ -463,7 +569,7 @@ app.registerExtension({
           positiveWidget.element.dispatchEvent(event);
         }
         // console.log(message.positive)
-			};
+      };
     }
   },
 });

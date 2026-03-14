@@ -462,6 +462,8 @@ const handleMessage = (event) => {
     }
     nextTick(() => {
       promptBoxRef.value.setPromptText(event.data.prompt)
+      // 设置当前编辑的节点ID，用于监听节点数据变化
+      promptBoxRef.value.setCurrentEditNodeId(event.data.id)
     })
     windowManager.setActiveWindow('prompt')
 

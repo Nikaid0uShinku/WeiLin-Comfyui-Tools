@@ -691,6 +691,7 @@ const langBtnRef = ref(null)
 const languageSwitcherRef = ref(null)
 
 // Lora选择信息
+const currentEditNodeId = ref('') // 当前编辑的节点ID
 const selectedLoras = ref([])
 const loraOpen = ref(false)
 
@@ -3247,6 +3248,24 @@ const handleMessage = (event) => {
       // 触发输入事件以更新词组
       processInput()
     }
+  } else if (event.data.type && event.data.type.startsWith('weilin_prompt_ui_lora_data_changed_')) {
+    // 接收节点lora数据变化通知
+    const nodeId = event.data.type.replace('weilin_prompt_ui_lora_data_changed_', '')
+    // 只有当当前编辑的节点ID匹配时才更新
+    if (nodeId === currentEditNodeId.value && event.data.data) {
+      try {
+        const jsonStr = JSON.parse(event.data.data)
+        // 更新 selectedLoras，保持与节点数据同步
+        selectedLoras.value = []
+        if (jsonStr.temp_lora && jsonStr.temp_lora.length > 0 && jsonStr.temp_lora != "") {
+          selectedLoras.value = jsonStr.temp_lora
+        } else if (jsonStr.lora && jsonStr.lora != "") {
+          selectedLoras.value = jsonStr.lora
+        }
+      } catch (e) {
+        console.error('解析lora数据变化失败:', e)
+      }
+    }
   }
 }
 
@@ -3643,7 +3662,14 @@ const setPromptText = (text) => {
       inputText.value = jsonStr.prompt
       lastInputValue.value = inputText.value; // 更新上一次的输入内容
 
-      if (jsonStr.lora && jsonStr.lora != "") {
+      // 重置 selectedLoras，避免旧数据残留
+      selectedLoras.value = []
+
+      // 优先使用 temp_lora（临时lora数据，包含隐藏状态等完整信息）
+      if (jsonStr.temp_lora && jsonStr.temp_lora.length > 0 && jsonStr.temp_lora != "") {
+        selectedLoras.value = jsonStr.temp_lora
+      } else if (jsonStr.lora && jsonStr.lora != "") {
+        // 如果没有 temp_lora，使用 lora
         selectedLoras.value = jsonStr.lora
       }
 
@@ -3656,8 +3682,12 @@ const setPromptText = (text) => {
           tokens.value = tempDataJson.tokens
           isOldVersion = true
         }
+        // 注意：这里不再从 temp_prompt 中设置 lora，因为已经在上面统一处理了
         if (tempDataJson.lora && tempDataJson.lora.length > 0 && tempDataJson.lora != "") {
-          selectedLoras.value = tempDataJson.lora
+          // 只有在没有设置 temp_lora 和 lora 时才使用 temp_prompt.lora
+          if (selectedLoras.value.length === 0) {
+            selectedLoras.value = tempDataJson.lora
+          }
           isOldVersion = true
         }
 
@@ -3667,16 +3697,14 @@ const setPromptText = (text) => {
 
       }
 
-      if (jsonStr.temp_lora && jsonStr.temp_lora.length > 0 && jsonStr.temp_lora != "") {
-        const tempDataJson = jsonStr.temp_lora
-        selectedLoras.value = tempDataJson
-      }
-
       processInput()
     } catch (error) {
       // console.log('读取数据错误：', error)
       message({ type: "warn", str: 'promptBox.settings.errorPrompt' });
     }
+  } else {
+    // 如果 text 为空，清空 selectedLoras
+    selectedLoras.value = []
   }
 }
 
@@ -4113,8 +4141,14 @@ const clearDisabledTags = () => {
   message({ type: "success", str: t('promptBox.clearDisabledSuccess') || '已清空所有禁用标签' });
 };
 
+// 设置当前编辑的节点ID
+const setCurrentEditNodeId = (nodeId) => {
+  currentEditNodeId.value = nodeId
+}
+
 defineExpose({
-  setPromptText
+  setPromptText,
+  setCurrentEditNodeId
 })
 </script>
 
