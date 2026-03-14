@@ -116,6 +116,7 @@ app.registerExtension({
 
         const thisNodeName = nodeData.name // 存储当前的节点名称
         let nodeTextAreaList = [] // 按顺序载入element，name="positive" || "lora_str" || "temp_str"
+        let nodeWidgetList = [] // 保存widget引用，用于同步更新widget.value
         const thisNodeSeed = generateUUID(); // 随机唯一种子ID
 
         if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIWithoutLora") {
@@ -133,22 +134,27 @@ app.registerExtension({
             let thisInputElement = widgetItem.element
             // thisInputElement.readOnly = true
             nodeTextAreaList[0] = thisInputElement
+            nodeWidgetList[0] = widgetItem
           } else if (widgetItem.name == "lora_str") {
             let thisInputElement = widgetItem.element
             thisInputElement.readOnly = true
             nodeTextAreaList[1] = thisInputElement
+            nodeWidgetList[1] = widgetItem
           } else if (widgetItem.name == "temp_str") {
             let thisInputElement = widgetItem.element
             thisInputElement.readOnly = true
             nodeTextAreaList[2] = thisInputElement
+            nodeWidgetList[2] = widgetItem
           } else if (widgetItem.name == "temp_lora_str") {
             let thisInputElement = widgetItem.element
             thisInputElement.readOnly = true
             nodeTextAreaList[3] = thisInputElement
+            nodeWidgetList[3] = widgetItem
           } else if (widgetItem.name == "random_template") {
             let thisInputElement = widgetItem.element
             thisInputElement.readOnly = true
             nodeTextAreaList[4] = thisInputElement
+            nodeWidgetList[4] = widgetItem
           }
         }
 
@@ -262,15 +268,15 @@ app.registerExtension({
               temp_prompt: {},
               temp_lora: {},
             }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1].value.length > 0) {
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
               jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
             }
 
-            if (nodeTextAreaList[2].value.length > 0) {
+            if (nodeTextAreaList[2] && nodeTextAreaList[2].value && nodeTextAreaList[2].value.length > 0) {
               jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
             }
 
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3].value.length > 0) {
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
               jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
             }
 
@@ -291,11 +297,11 @@ app.registerExtension({
               lora: [],
               temp_lora: {},
             }
-            if (nodeTextAreaList[1].value.length > 0) {
+            if (nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
               jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
             }
 
-            if (nodeTextAreaList[3].value.length > 0) {
+            if (nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
               jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
             }
 
@@ -313,27 +319,34 @@ app.registerExtension({
             const jsonReponse = JSON.parse(event.data.data)
             // console.log(jsonReponse)
             nodeTextAreaList[0].value = jsonReponse.prompt;
+            if (nodeWidgetList[0]) nodeWidgetList[0].value = jsonReponse.prompt;
 
             if (nodeData.name === "WeiLinPromptUI") {
               // console.log(jsonReponse.lora.length)
               if (jsonReponse.lora && jsonReponse.lora.length > 0 && jsonReponse.lora != "") {
-                nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                if (nodeTextAreaList[1]) nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                if (nodeWidgetList[1]) nodeWidgetList[1].value = JSON.stringify(jsonReponse.lora);
               } else {
-                nodeTextAreaList[1].value = "";
+                if (nodeTextAreaList[1]) nodeTextAreaList[1].value = "";
+                if (nodeWidgetList[1]) nodeWidgetList[1].value = "";
               }
             }
 
             if (jsonReponse.temp_prompt && jsonReponse.temp_prompt != "") {
-              nodeTextAreaList[2].value = JSON.stringify(jsonReponse.temp_prompt);
+              if (nodeTextAreaList[2]) nodeTextAreaList[2].value = JSON.stringify(jsonReponse.temp_prompt);
+              if (nodeWidgetList[2]) nodeWidgetList[2].value = JSON.stringify(jsonReponse.temp_prompt);
             }else {
-              nodeTextAreaList[2].value = "";
+              if (nodeTextAreaList[2]) nodeTextAreaList[2].value = "";
+              if (nodeWidgetList[2]) nodeWidgetList[2].value = "";
             }
 
             if (nodeData.name === "WeiLinPromptUI") {
               if (jsonReponse.temp_lora && jsonReponse.temp_lora != "") {
-                nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                if (nodeTextAreaList[3]) nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                if (nodeWidgetList[3]) nodeWidgetList[3].value = JSON.stringify(jsonReponse.temp_lora);
               }else {
-                nodeTextAreaList[3].value = "";
+                if (nodeTextAreaList[3]) nodeTextAreaList[3].value = "";
+                if (nodeWidgetList[3]) nodeWidgetList[3].value = "";
               }
             }
 
@@ -360,13 +373,13 @@ app.registerExtension({
               temp_prompt: {},
               temp_lora: {},
             }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1].value.length > 0) {
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1] && nodeTextAreaList[1].value && nodeTextAreaList[1].value.length > 0) {
               jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
             }
-            if (nodeTextAreaList[2].value.length > 0) {
+            if (nodeTextAreaList[2] && nodeTextAreaList[2].value && nodeTextAreaList[2].value.length > 0) {
               jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
             }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3].value.length > 0) {
+            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
               jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
             }
 
@@ -380,18 +393,22 @@ app.registerExtension({
             if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
               // console.log(jsonReponse.lora.length)
               if (jsonReponse.lora && jsonReponse.lora.length > 0 && jsonReponse.lora != "") {
-                nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                if (nodeTextAreaList[1]) nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                if (nodeWidgetList[1]) nodeWidgetList[1].value = JSON.stringify(jsonReponse.lora);
               } else {
-                nodeTextAreaList[1].value = "";
+                if (nodeTextAreaList[1]) nodeTextAreaList[1].value = "";
+                if (nodeWidgetList[1]) nodeWidgetList[1].value = "";
               }
 
               if (jsonReponse.temp_lora && jsonReponse.temp_lora != "") {
-                nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                if (nodeTextAreaList[3]) nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                if (nodeWidgetList[3]) nodeWidgetList[3].value = JSON.stringify(jsonReponse.temp_lora);
               }else{
-                nodeTextAreaList[3].value = "";
+                if (nodeTextAreaList[3]) nodeTextAreaList[3].value = "";
+                if (nodeWidgetList[3]) nodeWidgetList[3].value = "";
               }
 
-              if (nodeTextAreaList[3].value.length > 0) {
+              if (nodeTextAreaList[3] && nodeTextAreaList[3].value && nodeTextAreaList[3].value.length > 0) {
                 window.weilinGlobalSelectedLoras[thisNodeSeed] = JSON.parse(nodeTextAreaList[3].value)
               }else {
                 window.weilinGlobalSelectedLoras[thisNodeSeed]= []
@@ -404,20 +421,25 @@ app.registerExtension({
             const jsonReponse = JSON.parse(event.data.data)
             if (nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
               if (jsonReponse.lora && jsonReponse.lora.length > 0 && jsonReponse.lora != "") {
-                nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                if (nodeTextAreaList[1]) nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                if (nodeWidgetList[1]) nodeWidgetList[1].value = JSON.stringify(jsonReponse.lora);
               } else {
-                nodeTextAreaList[1].value = "";
+                if (nodeTextAreaList[1]) nodeTextAreaList[1].value = "";
+                if (nodeWidgetList[1]) nodeWidgetList[1].value = "";
               }
               if (jsonReponse.temp_lora && jsonReponse.temp_lora != "") {
-                nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                if (nodeTextAreaList[3]) nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                if (nodeWidgetList[3]) nodeWidgetList[3].value = JSON.stringify(jsonReponse.temp_lora);
               }else{
-                nodeTextAreaList[3].value = "";
+                if (nodeTextAreaList[3]) nodeTextAreaList[3].value = "";
+                if (nodeWidgetList[3]) nodeWidgetList[3].value = "";
               }
             }
           }else if (event.data.type === "weilin_prompt_ui_selectLora_stack_node_"+thisNodeSeed) {
             addLora(thisNodeSeed,event.data.lora)
           }else if (event.data.type === "weilin_prompt_ui_update_template_"+randomID) {
             nodeTextAreaList[4].value = event.data.data
+            if (nodeWidgetList[4]) nodeWidgetList[4].value = event.data.data
           }else if (event.data.type === "weilin_prompt_ui_get_template_"+randomID) {
             window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_response', id: randomID, data: nodeTextAreaList[4].value }, '*')
           }else if (event.data.type === "weilin_prompt_ui_get_template_go_random_"+randomID) {
