@@ -119,7 +119,9 @@ def get_lora_trigger_words(lora_path, lora_name, force_fetch_civitai=False):
     """
     try:
         from .app.server.prompt_api.trigger_words import get_first_trigger_word
-        return get_first_trigger_word(lora_path, lora_name, force_fetch_civitai)
+        result = get_first_trigger_word(lora_path, lora_name, force_fetch_civitai)
+        print(f"[DEBUG] get_first_trigger_word返回: {result}")
+        return result
     except ImportError as e:
         print(f"[TriggerWords] 导入模块失败，使用回退逻辑: {e}")
         # 回退到原有逻辑（向后兼容）
@@ -433,6 +435,9 @@ class WeiLinPromptUI:
                 # 获取触发词
                 lora_name = os.path.splitext(str_lora_item["lora"])[0]
                 trigger_word = get_lora_trigger_words(lora_path, lora_name)
+                print(f"[DEBUG] get_lora_trigger_words返回类型: {type(trigger_word)}")
+                print(f"[DEBUG] get_lora_trigger_words返回值: {trigger_word}")
+                print(f"[DEBUG] 触发词长度: {len(trigger_word) if trigger_word else 0}")
                 print(f"触发词: {trigger_word if trigger_word else '无'}")
 
                 # 收集触发词（带权重）

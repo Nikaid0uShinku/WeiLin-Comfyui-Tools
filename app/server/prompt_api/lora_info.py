@@ -191,8 +191,17 @@ def _update_data(info_data: dict) -> bool:
         should_save = True
 
     # 自动关联 trainedWords 到 loraWorks（解决触发词自动填充问题）
-    # 处理 loraWorks 不存在或为空的情况
+    # 处理 loraWorks 不存在、为空、或包含多个词的情况
+    should_update_loraWorks = False
+    
     if "loraWorks" not in info_data or not info_data["loraWorks"]:
+        # loraWorks不存在或为空
+        should_update_loraWorks = True
+    elif isinstance(info_data["loraWorks"], str) and "," in info_data["loraWorks"]:
+        # loraWorks包含多个词（用逗号分隔），需要更新为只取第一个
+        should_update_loraWorks = True
+    
+    if should_update_loraWorks:
         # 从 trainedWords 中提取第一个训练词作为默认触发词
         if (
             "trainedWords" in info_data
@@ -360,6 +369,53 @@ def download_image(url, filename, directory):
         print(f"文件名处理错误: {e}")
 
 
+def _is_common_tag(tag: str) -> bool:
+    """
+    判断是否为常见通用标签（非触发词）
+    
+    这些标签通常出现在训练数据中，但不是真正的触发词
+    """
+    # 常见通用标签列表（小写）
+    common_tags = {
+        # 人物相关
+        '1girl', '1boy', '2girls', '2boys', '3girls', '3boys', 'multiple girls', 'multiple boys',
+        'solo', 'couple', 'group',
+        # 身体特征
+        'long hair', 'short hair', 'white hair', 'black hair', 'blonde hair', 'brown hair',
+        'red hair', 'blue hair', 'green hair', 'pink hair', 'purple hair', 'silver hair',
+        'gradient hair', 'multicolored hair', 'two-tone hair',
+        'blue eyes', 'green eyes', 'brown eyes', 'red eyes', 'yellow eyes', 'purple eyes',
+        'black eyes', 'white eyes', 'orange eyes', 'pink eyes',
+        'small breasts', 'medium breasts', 'large breasts', 'huge breasts',
+        # 服装相关
+        'dress', 'white dress', 'black dress', 'red dress', 'blue dress', 'green dress',
+        'school uniform', 'swimsuit', 'bikini', 'maid', 'nurse', 'waitress',
+        'skirt', 'shorts', 'pants', 'jeans', 'shirt', 'blouse', 'jacket', 'coat',
+        # 姿势相关
+        'standing', 'sitting', 'lying', 'walking', 'running', 'jumping',
+        'looking at viewer', 'looking away', 'from behind', 'from side', 'from above', 'from below',
+        # 背景相关
+        'simple background', 'white background', 'black background', 'grey background',
+        'outdoors', 'indoors', 'sky', 'cloud', 'tree', 'flower', 'water', 'building',
+        # 画面风格
+        'highres', 'absurdres', 'best quality', 'high quality', 'normal quality', 'low quality',
+        'masterpiece', 'great quality', 'good quality', 'average quality', 'bad quality',
+        'worst quality', 'very bad quality',
+        # 其他常见标签
+        'smile', 'open mouth', 'closed mouth', 'blush', 'tears', 'sweat',
+        'gloves', 'shoes', 'boots', 'socks', 'stockings', 'pantyhose',
+        'hat', 'headwear', 'hair ornament', 'ribbon', 'bow', 'flower', 'jewelry',
+        'bangs', 'ponytail', 'twintails', 'braid', 'ahoge', 'sidelocks',
+        'pointy ears', 'animal ears', 'cat ears', 'dog ears', 'rabbit ears', 'fox ears',
+        'tail', 'cat tail', 'dog tail', 'fox tail', 'rabbit tail',
+        'wings', 'angel wings', 'demon wings', 'fairy wings',
+        'no humans', 'scenery', 'landscape', 'cityscape', 'seascape',
+    }
+    
+    tag_lower = tag.lower().strip()
+    return tag_lower in common_tags
+
+
 def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
     """
     合并模型元数据到info_data
@@ -399,7 +455,24 @@ def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
     if "trainedWords" not in info_data:
         # 按训练次数降序排序（与 ComfyUI-Lora-Auto-Trigger-Words 保持一致）
         sorted_words = sorted(trained_words.values(), key=lambda x: x["count"], reverse=True)
-        info_data["trainedWords"] = sorted_words
+        
+        # 智能过滤：优先保留非通用标签
+        # 如果前几个标签都是通用标签，尝试找到第一个非通用标签放在最前面
+        filtered_words = []
+        non_common_words = []
+        
+        for word_data in sorted_words:
+            if not _is_common_tag(word_data["word"]):
+                non_common_words.append(word_data)
+            else:
+                filtered_words.append(word_data)
+        
+        # 如果有非通用标签，将它们放在前面
+        if non_common_words:
+            info_data["trainedWords"] = non_common_words + filtered_words
+        else:
+            info_data["trainedWords"] = sorted_words
+        
         should_save = True
     else:
         # We can't merge, because the list may have other data, like it's part of civitaidata.
@@ -414,7 +487,23 @@ def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
         # 按训练次数排序（有count的排前面，没有count的保持原顺序）
         merged_list = list(merged_dict.values())
         merged_list.sort(key=lambda x: x.get("count", 99999), reverse=True)
-        info_data["trainedWords"] = merged_list
+        
+        # 智能过滤：优先保留非通用标签
+        filtered_words = []
+        non_common_words = []
+        
+        for word_data in merged_list:
+            if not _is_common_tag(word_data.get("word", "")):
+                non_common_words.append(word_data)
+            else:
+                filtered_words.append(word_data)
+        
+        # 如果有非通用标签，将它们放在前面
+        if non_common_words:
+            info_data["trainedWords"] = non_common_words + filtered_words
+        else:
+            info_data["trainedWords"] = merged_list
+        
         should_save = True
 
     # trained_words = list(trained_words.values())
@@ -485,7 +574,12 @@ def _merge_civitai_data(info_data: dict, data_civitai: dict) -> bool:
             
             # 合并：Civitai触发词在前，其他触发词在后
             non_civitai_words = [data for data in info_data["trainedWords"] if not data.get("civitai", False)]
-            info_data["trainedWords"] = civitai_word_data_list + [existing_words.get(data["word"], data) for data in info_data["trainedWords"] if data.get("civitai", False) and data["word"] not in {w["word"] for w in civitai_word_data_list}] + non_civitai_words
+            civitai_existing_words = [
+                existing_words.get(data["word"], data) 
+                for data in info_data["trainedWords"] 
+                if data.get("civitai", False) and data["word"] not in {w["word"] for w in civitai_word_data_list}
+            ]
+            info_data["trainedWords"] = civitai_word_data_list + civitai_existing_words + non_civitai_words
             should_save = True
 
     if "sha256" not in info_data:

@@ -115,7 +115,30 @@ def get_civitai_trigger_words(lora_path: str, lora_name: str, force_fetch: bool 
     
     if output_tags is not None and not force_fetch:
         print(f"[TriggerWords] 从缓存获取Civitai触发词: {lora_name}")
-        return output_tags if isinstance(output_tags, list) else []
+        # 处理缓存数据格式
+        if isinstance(output_tags, list):
+            # 如果列表只有一个元素且包含逗号，说明是旧格式（所有触发词拼接在一起）
+            if len(output_tags) == 1 and isinstance(output_tags[0], str) and "," in output_tags[0]:
+                # 按逗号分割成多个触发词
+                trigger_words = [word.strip() for word in output_tags[0].split(",") if word.strip()]
+                print(f"[TriggerWords] 缓存数据格式转换: 从1个元素转换为{len(trigger_words)}个触发词")
+                
+                # 应用智能过滤，确保第一个触发词是真正的触发词
+                non_common_words = [word for word in trigger_words if not _is_common_tag(word)]
+                common_words = [word for word in trigger_words if _is_common_tag(word)]
+                
+                if non_common_words:
+                    # 如果有非通用标签，将它们放在前面
+                    filtered_words = non_common_words + common_words
+                    print(f"[TriggerWords] Civitai智能过滤: 非通用标签{len(non_common_words)}个, 通用标签{len(common_words)}个")
+                    print(f"[DEBUG] Civitai前5个非通用标签: {non_common_words[:5]}")
+                    return filtered_words
+                else:
+                    # 如果都是通用标签，保持原顺序
+                    return trigger_words
+            
+            return output_tags
+        return []
     
     # 计算SHA256并查询Civitai
     try:
@@ -148,6 +171,53 @@ def get_civitai_trigger_words(lora_path: str, lora_name: str, force_fetch: bool 
         print(f"[TriggerWords] Civitai获取失败: {e}")
     
     return []
+
+
+def _is_common_tag(tag: str) -> bool:
+    """
+    判断是否为常见通用标签（非触发词）
+    
+    这些标签通常出现在训练数据中，但不是真正的触发词
+    """
+    # 常见通用标签列表（小写）
+    common_tags = {
+        # 人物相关
+        '1girl', '1boy', '2girls', '2boys', '3girls', '3boys', 'multiple girls', 'multiple boys',
+        'solo', 'couple', 'group',
+        # 身体特征
+        'long hair', 'short hair', 'white hair', 'black hair', 'blonde hair', 'brown hair',
+        'red hair', 'blue hair', 'green hair', 'pink hair', 'purple hair', 'silver hair',
+        'gradient hair', 'multicolored hair', 'two-tone hair',
+        'blue eyes', 'green eyes', 'brown eyes', 'red eyes', 'yellow eyes', 'purple eyes',
+        'black eyes', 'white eyes', 'orange eyes', 'pink eyes',
+        'small breasts', 'medium breasts', 'large breasts', 'huge breasts',
+        # 服装相关
+        'dress', 'white dress', 'black dress', 'red dress', 'blue dress', 'green dress',
+        'school uniform', 'swimsuit', 'bikini', 'maid', 'nurse', 'waitress',
+        'skirt', 'shorts', 'pants', 'jeans', 'shirt', 'blouse', 'jacket', 'coat',
+        # 姿势相关
+        'standing', 'sitting', 'lying', 'walking', 'running', 'jumping',
+        'looking at viewer', 'looking away', 'from behind', 'from side', 'from above', 'from below',
+        # 背景相关
+        'simple background', 'white background', 'black background', 'grey background',
+        'outdoors', 'indoors', 'sky', 'cloud', 'tree', 'flower', 'water', 'building',
+        # 画面风格
+        'highres', 'absurdres', 'best quality', 'high quality', 'normal quality', 'low quality',
+        'masterpiece', 'great quality', 'good quality', 'average quality', 'bad quality',
+        'worst quality', 'very bad quality',
+        # 其他常见标签
+        'smile', 'open mouth', 'closed mouth', 'blush', 'tears', 'sweat',
+        'gloves', 'shoes', 'boots', 'socks', 'stockings', 'pantyhose',
+        'hat', 'headwear', 'hair ornament', 'ribbon', 'bow', 'flower', 'jewelry',
+        'bangs', 'ponytail', 'twintails', 'braid', 'ahoge', 'sidelocks',
+        'pointy ears', 'animal ears', 'cat ears', 'dog ears', 'rabbit ears', 'fox ears',
+        'tail', 'cat tail', 'dog tail', 'fox tail', 'rabbit tail',
+        'wings', 'angel wings', 'demon wings', 'fairy wings',
+        'no humans', 'scenery', 'landscape', 'cityscape', 'seascape',
+    }
+    
+    tag_lower = tag.lower().strip()
+    return tag_lower in common_tags
 
 
 def get_metadata_trigger_words(lora_path: str) -> list:
@@ -210,10 +280,29 @@ def get_metadata_trigger_words(lora_path: str) -> list:
                 
                 # 按训练次数降序排序
                 sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
-                result = [tag for tag, count in sorted_tags]
+                
+                # 智能过滤：优先保留非通用标签
+                non_common_tags = []
+                common_tags_list = []
+                
+                for tag, count in sorted_tags:
+                    if not _is_common_tag(tag):
+                        non_common_tags.append((tag, count))
+                    else:
+                        common_tags_list.append((tag, count))
+                
+                # 如果有非通用标签，将它们放在前面
+                if non_common_tags:
+                    result = [tag for tag, count in non_common_tags] + [tag for tag, count in common_tags_list]
+                    print(f"[DEBUG] 智能过滤生效: 非通用标签{len(non_common_tags)}个, 通用标签{len(common_tags_list)}个")
+                    print(f"[DEBUG] 前5个非通用标签: {[tag for tag, count in non_common_tags[:5]]}")
+                else:
+                    result = [tag for tag, count in sorted_tags]
+                    print(f"[DEBUG] 智能过滤未生效: 所有标签都是通用标签")
                 
                 if result:
                     print(f"[TriggerWords] 从元数据获取到 {len(result)} 个触发词(ss_tag_frequency)")
+                    print(f"[DEBUG] 第一个触发词: {result[0]}")
                 
                 return result
             
@@ -332,64 +421,52 @@ def get_trigger_words(
         "source": ""
     }
     
+    # 按优先级获取触发词，一旦找到有效数据就不再执行后续方式
     # 1. Civitai API (最高优先级)
     if include_civitai:
         civitai_words = get_civitai_trigger_words(lora_path, lora_name, force_fetch_civitai)
         result["civitai_words"] = civitai_words
+        if civitai_words:
+            # Civitai有数据，直接返回，不再执行后续方式
+            result["first_trigger_word"] = civitai_words[0]
+            result["source"] = "civitai"
+            result["all_trigger_words"] = civitai_words
+            return result
     
     # 2. 元数据 ss_tag_frequency
     if include_metadata:
         metadata_words = get_metadata_trigger_words(lora_path)
         result["metadata_words"] = metadata_words
+        if metadata_words:
+            # 元数据有数据，直接返回，不再执行后续方式
+            result["first_trigger_word"] = metadata_words[0]
+            result["source"] = "metadata"
+            result["all_trigger_words"] = metadata_words
+            return result
     
     # 3. 元数据 ss_output_name
     if include_output_name:
         output_name = get_output_name_trigger_words(lora_path)
         result["output_name"] = output_name
+        if output_name:
+            # 输出名称有数据，直接返回，不再执行后续方式
+            result["first_trigger_word"] = output_name
+            result["source"] = "output_name"
+            result["all_trigger_words"] = [output_name]
+            return result
     
     # 4. 文件名回退
     if include_filename:
         filename_word = get_filename_trigger_words(lora_name)
         result["filename_word"] = filename_word
+        if filename_word:
+            # 文件名有数据，直接返回
+            result["first_trigger_word"] = filename_word
+            result["source"] = "filename"
+            result["all_trigger_words"] = [filename_word]
+            return result
     
-    # 确定第一个触发词和来源
-    if result["civitai_words"]:
-        result["first_trigger_word"] = result["civitai_words"][0]
-        result["source"] = "civitai"
-    elif result["metadata_words"]:
-        result["first_trigger_word"] = result["metadata_words"][0]
-        result["source"] = "metadata"
-    elif result["output_name"]:
-        result["first_trigger_word"] = result["output_name"]
-        result["source"] = "output_name"
-    elif result["filename_word"]:
-        result["first_trigger_word"] = result["filename_word"]
-        result["source"] = "filename"
-    
-    # 合并所有触发词（去重）
-    all_words = []
-    seen = set()
-    
-    for word in result["civitai_words"]:
-        if word and word not in seen:
-            all_words.append(word)
-            seen.add(word)
-    
-    for word in result["metadata_words"]:
-        if word and word not in seen:
-            all_words.append(word)
-            seen.add(word)
-    
-    if result["output_name"] and result["output_name"] not in seen:
-        all_words.append(result["output_name"])
-        seen.add(result["output_name"])
-    
-    if result["filename_word"] and result["filename_word"] not in seen:
-        all_words.append(result["filename_word"])
-        seen.add(result["filename_word"])
-    
-    result["all_trigger_words"] = all_words
-    
+    # 所有方式都没有找到数据，返回空结果
     return result
 
 
@@ -420,4 +497,9 @@ def get_first_trigger_word(
         include_output_name=True,
         include_filename=True
     )
+    print(f"[DEBUG] get_trigger_words返回的result: {result}")
+    print(f"[DEBUG] first_trigger_word: {result['first_trigger_word']}")
+    print(f"[DEBUG] source: {result['source']}")
+    print(f"[DEBUG] civitai_words: {result['civitai_words']}")
+    print(f"[DEBUG] metadata_words前5个: {result['metadata_words'][:5] if result['metadata_words'] else []}")
     return result["first_trigger_word"]
