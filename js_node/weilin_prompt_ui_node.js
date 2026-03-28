@@ -497,7 +497,7 @@ waitForApp((app) => {
         // console.log(this)
 
         // 修改的是这部分
-          if (nodeData.name === "WeiLinPromptUI" ||
+        if (nodeData.name === "WeiLinPromptUI" ||
           nodeData.name === "WeiLinPromptUIWithoutLora") {
           globalNodeList.push({ seed: thisNodeSeed, text: nodeTextAreaList[0].value, id: this.id })
 
